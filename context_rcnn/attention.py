@@ -31,7 +31,7 @@ class FullyConnected(torch.nn.Module):
         return y
 
 class Attention(torch.nn.Module):
-    def __init__(self, n, m, inp_d0, con_d0, d1=2048, d2=2048, temp=0.01, normalize_vf=True):
+    def __init__(self, n, m, inp_d0, con_d0, d1=2048, d2=2048, temp=0.01):
         """
         Args:
             n: number of input items (bounding boxes)
@@ -43,9 +43,6 @@ class Attention(torch.nn.Module):
             d1: first hidden layer size   (2048 in paper)
             d2: second hidden layer size  (2048 in paper)
             temp: softmax temperature     (0.01 in paper)
-            normalize_vf: whether to l2 normalize the outputs of values and final projection layers.
-                            This appears to be True in the tf implementation, but False in the paper's
-                            diagram, and not specified in paper's implementation details
         """
         super(Attention, self).__init__()
         
