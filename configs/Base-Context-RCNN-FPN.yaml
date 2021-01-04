@@ -30,10 +30,10 @@ MODEL:
     NUM_CONV: 4
     POOLER_RESOLUTION: 14
   CONTEXT:
-    NUM_CONTEXT_ITEMS: 2000
-    D1: 256 # hidden layer 1
-    D2: 256 # hidden layer 2
-    SOFTMAX_TEMP: 0.1
+    NUM_CONTEXT_ITEMS: 8500
+    D1: 2048 # hidden layer 1
+    D2: 2048 # hidden layer 2
+    SOFTMAX_TEMP: 0.01
     NUM_INPUT_FEATS: 256
     # this assumes context does not include datetime
     NUM_CONTEXT_FEATS: 260

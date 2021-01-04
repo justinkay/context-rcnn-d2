@@ -30,26 +30,26 @@ def get_feats_for_im(predictor, im):
         im: an image loaded with cv2.imread(...)
     """
     # register a hook for this image to keep intermediate output from backbone
-    saved_output = SaveIO()
-    handle = predictor.model.backbone.register_forward_hook(saved_output)
+    roi_heads_io = SaveIO()
+    handle = predictor.model.roi_heads.register_forward_hook(roi_heads_io)
     
     # run inference and grab backbone features
     output = predictor(im)
-    feats_list = [saved_output.output[f] for f in predictor.model.roi_heads.in_features]
-    
-    # resize prediction to match input dims of model
+    images, features, proposals, gt_instances = roi_heads_io.input
+#     results, _ = roi_heads_io.output
+    feats_list = [features[f] for f in predictor.model.roi_heads.in_features]
+
     tfm = predictor.aug.get_transform(im)
     instances = detector_postprocess(output["instances"], output_height=tfm.new_h, output_width=tfm.new_w)
     
     # get pooled features of the top prediction
     # TODO support more than 1 box
     top_pred = instances.pred_boxes[0]
-    feats_list = [saved_output.output[f] for f in predictor.model.roi_heads.in_features]
     pooled_feats = predictor.model.roi_heads.box_pooler(feats_list, [top_pred])
     
     # pool over spatial dimensions to get final feats
-    final_pooler = torch.nn.AdaptiveAvgPool2d(1)
-    final_feats = torch.squeeze(final_pooler(pooled_feats))
+    # assume batch size = 1 
+    final_feats = torch.squeeze(pooled_feats.mean([-2, -1]))
     
     # add scaled bbox info as additional feats
     img_wh = torch.Tensor([tfm.new_w, tfm.new_h]).to(top_pred.tensor.device)
@@ -117,3 +117,34 @@ def build_banks(cfg, dataset_name, data_dir, bank_dir, gpu_idx=0, num_gpus=1):
                 
             with open(os.path.join(bank_dir, str(location) + "_flip.pkl"), "wb") as f:
                 pickle.dump(flipped_output, f)
+                
+def build_one_bank(cfg, dataset_name, data_dir, bank_dir, loc, in_train):
+    """Method used mostly for testing."""
+    if not os.path.exists(bank_dir):
+        os.mkdir(bank_dir)
+        
+    predictor = DefaultPredictor(cfg)
+    register_dataset(data_dir, dataset_name)
+    img_loc = os.path.join(data_dir, _DATASETS[dataset_name]["imgs_loc"])
+    
+    dataset = dataset_name + "_train" if in_train else dataset_name + "_val"
+    dataset_dict = DatasetCatalog.get(dataset)
+    df = pd.DataFrame(dataset_dict)
+    df = df[df.location == loc]
+    if len(df):
+        output = {} 
+        flipped_output = {}
+        im_ids = df.image_id.values
+        for im_id in tqdm(im_ids):
+            im = cv2.imread(os.path.join(img_loc, im_id + ".jpg"))
+            # TODO append datetime features
+            output[im_id] = get_feats_for_im(predictor, im).cpu().numpy()
+            flipped_output[im_id] = get_feats_for_im(predictor, cv2.flip(im, 1)).cpu().numpy()
+                
+        with open(os.path.join(bank_dir, str(loc) + ".pkl"), "wb") as f:
+            pickle.dump(output, f)
+
+        with open(os.path.join(bank_dir, str(loc) + "_flip.pkl"), "wb") as f:
+            pickle.dump(flipped_output, f)
+    else:
+        print("Location", loc, "not found in", dataset)

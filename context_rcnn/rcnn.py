@@ -18,11 +18,8 @@ class ContextRCNN(GeneralizedRCNN):
     
     def forward(self, batched_inputs):
         """
-        Modified to match input parameters to ContextROIHeads, which takes
-        in batched_inputs as well.
-        
-        TODO: probably can get rid of batched_inputs as input to ContextROIHeads if
-        moving context_features to self.device here.
+        Modified to pass contextual information to self.roi_heads; otherwise, the same as 
+        GeneralizedRCNN.
         """
         if not self.training:
             return self.inference(batched_inputs)
@@ -46,6 +43,7 @@ class ContextRCNN(GeneralizedRCNN):
             i["context_feats"] = i["context_feats"].to(self.device)
             
         _, detector_losses = self.roi_heads(batched_inputs, images, features, proposals, gt_instances)
+        
         if self.vis_period > 0:
             storage = get_event_storage()
             if storage.iter % self.vis_period == 0:
@@ -58,8 +56,8 @@ class ContextRCNN(GeneralizedRCNN):
     
     def inference(self, batched_inputs, detected_instances=None, do_postprocess=True):
         """
-        Modified to match input parameters to ContextROIHeads, which takes
-        in batched_inputs as well.
+        Modified to pass contextual information to self.roi_heads; otherwise, the same as 
+        GeneralizedRCNN.
         """
         assert not self.training
 
@@ -105,7 +103,7 @@ class ContextRCNN(GeneralizedRCNN):
         storage = get_event_storage()
         max_vis_prop = 1
 
-        for input, prop, last_weights in zip(batched_inputs, proposals, self.roi_heads.fbo.long_term._last_weights):
+        for input, prop, last_weights in zip(batched_inputs, proposals, self.roi_heads.long_term._last_weights):
             # from d2; gt and top proposal(s)
             img = input["image"]
             img = convert_image_to_rgb(img.permute(1, 2, 0), self.input_format)
@@ -136,6 +134,8 @@ class ContextRCNN(GeneralizedRCNN):
                 top_im = convert_image_to_rgb(cv2.imread(top_im_path), "BGR")
                 resize_to = (imw, imh)
                 top_im = cv2.resize(top_im, resize_to)
+                if input["has_flip"]:
+                    top_im = cv2.flip(top_im, 1)
                 
                 context_feats = input["context_feats"].squeeze()
                 feats_top_im = context_feats[ind].detach().clone()

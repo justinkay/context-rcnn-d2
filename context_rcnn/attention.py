@@ -4,8 +4,7 @@ import torch.nn.functional as F
 
 class FullyConnected(torch.nn.Module):
     """
-    A fully connected layer (linear, relu, bn) plus additional
-    l2 normalization as in the tf implementation.
+    A fully connected layer (linear, relu, bn) plus additional l2 normalization.
     """
     def __init__(self, D_in, D_out, normalize=False):
         super(FullyConnected, self).__init__()
@@ -14,11 +13,17 @@ class FullyConnected(torch.nn.Module):
         self.fc = torch.nn.Sequential(
             torch.nn.Linear(D_in, D_out),
             torch.nn.ReLU(),
-            torch.nn.BatchNorm1d(D_out)
+            torch.nn.BatchNorm1d(D_out, eps=0.001, momentum=0.97) # match tf settings
         )
         self.normalize = normalize
         
     def forward(self, x):
+        """
+        Args:
+            x: B x n x D_in
+        Return:
+            y: B x n x D_out
+        """
         batch_size, _, num_features = x.shape
         features = torch.reshape(x, [-1, num_features])
         
@@ -30,63 +35,70 @@ class FullyConnected(torch.nn.Module):
             
         return y
 
+    
 class Attention(torch.nn.Module):
-    def __init__(self, n, m, inp_d0, con_d0, d1=2048, d2=2048, temp=0.01, normalize_vf=True):
+    def __init__(self, num_input_feats, num_context_feats, d1=2048, d2=2048, temp=0.01):
         """
         Args:
-            n: number of input items (bounding boxes)
-            m: number of context items (Mshort or Mlong in paper)
-            inp_d0: number of features per input box (2048 in paper (original Faster RCNN implementation);
-                                                      1024 for Detectron2 FRCNN C4; 
-                                                      256 for FPN)
-            con_d0: number of features per context item (d0 in paper)
+            num_feats: number of features per input box (2048 in paper (original Faster RCNN implementation; 256 for FPN)
+            num_context_feats: number of features per context item (d0=2057 in paper)
             d1: first hidden layer size   (2048 in paper)
             d2: second hidden layer size  (2048 in paper)
             temp: softmax temperature     (0.01 in paper)
-            normalize_vf: whether to l2 normalize the outputs of values and final projection layers.
-                            This appears to be True in the tf implementation, but False in the paper's
-                            diagram, and not specified in paper's implementation details
         """
         super(Attention, self).__init__()
         
-        self.fc_q = FullyConnected(inp_d0, d1, normalize=True)
-        self.fc_k = FullyConnected(con_d0, d1, normalize=True)
-        self.fc_v = FullyConnected(con_d0, d2, normalize=True)
-        self.fc_f = FullyConnected(d2, inp_d0, normalize=False)
+        self.fc_q = FullyConnected(num_input_feats, d1, normalize=True)
+        self.fc_k = FullyConnected(num_context_feats, d1, normalize=True)
+        self.fc_v = FullyConnected(num_context_feats, d2, normalize=True)
+        self.fc_f = FullyConnected(d2, num_input_feats, normalize=False)
         
         self.temp = temp
+        
+    @classmethod
+    def from_config(cls, cfg):
+        return cls(cfg.MODEL.CONTEXT.NUM_INPUT_FEATS, cfg.MODEL.CONTEXT.NUM_CONTEXT_FEATS,
+                       cfg.MODEL.CONTEXT.D1, cfg.MODEL.CONTEXT.D2, cfg.MODEL.CONTEXT.SOFTMAX_TEMP)
 
     def forward(self, x, x_context, num_valid_context_items):
         """
+        n = num input proposals
+        m = num context proposals
+        
         Args:
-            x: B x n x inp_d0 x kernel_size x kernel_size
-            x_context: B x m x con_d0
-            num_valid_context_items: B x 1; how many (<= m) context items are present
+            x: B x n x num_input_feats x kernel_size x kernel_size
+            x_context: B x m x num_context_feats
+            num_valid_context_items: B x 1; how many (<= m) context items are present for each image
         
         Return:
-            input + f_context: B x n x inp_d0 x kernel_size x kernel_size
+            f_context: B x n x num_input_feats x kernel_size x kernel_size
         """
-        A_pool = x.mean([-2, -1])                             # -> B x n x inp_d0
+        x_pool = x.mean([-2, -1])                             # -> B x n x num_input_feats
         
-        queries = self.fc_q(A_pool)                           # -> B x n x d1
+        queries = self.fc_q(x_pool)                           # -> B x n x d1
         keys = self.fc_k(x_context)                           # -> B x m x d1
         values = self.fc_v(x_context)                         # -> B x m x d2
         weights = torch.bmm(queries, keys.transpose(-2,-1))   # -> B x n x m
         
-        # mask attention weights and values. probably slow; TODO do batch in one step
+        # mask attention weights and values
+        weights_mask = torch.ones_like(weights)
+        values_mask = torch.ones_like(values)
         for im in range(x.shape[0]):
-            weights[im, :, num_valid_context_items[im]:] = float('-inf')
-            values[im, num_valid_context_items[im]:, :] = 0
-        
+            weights_mask[im, :, num_valid_context_items[im]:] = 0
+            values_mask[im, num_valid_context_items[im]:, :] = 0
+        weights = weights.masked_fill(weights_mask == 0, -1e9)
+        values = values.masked_fill(values_mask == 0, 0)
+
         weights = F.softmax(weights / self.temp, dim=-1)      # -> B x n x m, feats for each n sum to 1
         wv = torch.bmm(weights, values)                       # -> B x n x d2
-        f_context = self.fc_f(wv)                             # -> B x n x inp_d0
+        f_context = self.fc_f(wv)                             # -> B x n x num_input_feats
+        
+        # expand back to input shape
+        f_context = f_context.unsqueeze(-1).unsqueeze(-1).expand(x.shape) # -> B x n x num_input_feats x kernel_size x kernel_size
         
         # store these for debugging and visualization
-        self._last_weights = weights
+        self._last_weights = weights.detach()
+        self._last_bias = f_context.detach()
         
-        # "Finally, we add F context as a per-feature-channel bias back into our original input features A"
-        f_context_bias = f_context.unsqueeze(-1).unsqueeze(-1).expand(x.shape) # -> B x n x inp_d0 x kernel_size x kernel_size
-        
-        return x + f_context_bias
+        return f_context
         

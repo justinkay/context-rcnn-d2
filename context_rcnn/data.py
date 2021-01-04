@@ -53,6 +53,13 @@ _DATASETS = {
             "val_filename": "cct_coco_cameratraps_species_toy1924.json",
             "num_classes": 21
         },
+        
+        # for testing - one month of toy1924
+        "toy-month": {
+            "train_filename": "cct_coco_cameratraps_species_toy_month.json",
+            "val_filename": "cct_coco_cameratraps_species_toy_month.json",
+            "num_classes": 21
+        },
     }
 }
 logger = logging.getLogger(__name__)
@@ -294,6 +301,7 @@ class ContextDatasetMapper(DatasetMapper):
         dataset_dict["context_feats"] = context_feats
         dataset_dict["num_valid_context_items"] = num_valid_context_items
         dataset_dict["banks_dir"] = self.banks_dir
+        dataset_dict["has_flip"] = has_flip
         ### end modifications for ContextDatasetMapper ###
         
         if self.proposal_topk is not None:

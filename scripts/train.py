@@ -25,7 +25,7 @@ _MODELS = {
 }
 
 def get_training_config(data_dir="../data", model="context-rcnn-r101", device="cuda", num_gpus=8, banks_dir="./banks", dataset="cct", 
-                        subset="default", weights_path=None, lr=None, temp=0.01):
+                        subset="default", weights_path=None, lr=None, temp=0.01, amp=False, freeze=False):
     custom_weights_supplied = weights_path is not None
     weights_path = weights_path or _MODELS[model]["weights"]
     config_path = _MODELS[model]["config"]
@@ -33,7 +33,10 @@ def get_training_config(data_dir="../data", model="context-rcnn-r101", device="c
     cfg = get_cfg()
     
     # perform bs / lr scaling based on num gpus
-    bs = num_gpus * 4    # 4 ims / GPU with AMP enabled
+    if amp:
+        bs = num_gpus * 4
+    else:
+        bs = num_gpus * 2
     lr = 0.005 * bs / 16 # Detectron2 default is 0.02 * bs / 16
         
     add_context_rcnn_config(cfg)
@@ -43,7 +46,7 @@ def get_training_config(data_dir="../data", model="context-rcnn-r101", device="c
     cfg.MODEL.WEIGHTS = weights_path
     
     # enable mixed precision training
-    cfg.SOLVER.AMP.ENABLED = True
+    cfg.SOLVER.AMP.ENABLED = amp
     
     # this has worked well for me on AWS p3; YMMV
     # if you get a bunch of OpenBLAS errors during evaluation, try reducing this
@@ -64,22 +67,31 @@ def get_training_config(data_dir="../data", model="context-rcnn-r101", device="c
     
     num_imgs = len(DatasetCatalog.get(train_key))
     epoch_size = int(num_imgs / bs)
-
+    
     # based on Detectron2 defaults, which trained COCO for ~37 epochs
-    cfg.SOLVER.MAX_ITER = 37*epoch_size
-    cfg.SOLVER.STEPS = (24*epoch_size, 32*epoch_size)
+#     cfg.SOLVER.MAX_ITER = 37*epoch_size
+#     cfg.SOLVER.STEPS = (24*epoch_size, 32*epoch_size)
     
     # or try a reduced schedule
-#     cfg.SOLVER.MAX_ITER = 18*epoch_size
-#     cfg.SOLVER.STEPS = (12*epoch_size, 16*epoch_size)
+    cfg.SOLVER.MAX_ITER = 18*epoch_size
+    cfg.SOLVER.STEPS = (12*epoch_size, 16*epoch_size)
     
+    # make sure warmup period is shorter than first training stage
+    if cfg.SOLVER.WARMUP_ITERS >= cfg.SOLVER.STEPS[0]:
+        cfg.SOLVER.WARMUP_ITERS = int(cfg.SOLVER.STEPS[0]/2)
+
     # evaluate and save after every epoch
     # makes this a multiple of PeriodicWriter default period so that eval metrics always get written to 
     # Tensorboard / WandB
-    approx_epoch = epoch_size // 20 * 20
+    approx_epoch = max(20, epoch_size // 20 * 20)
     cfg.TEST.EVAL_PERIOD = approx_epoch
     cfg.SOLVER.CHECKPOINT_PERIOD = approx_epoch
     cfg.VIS_PERIOD = approx_epoch
+    
+    # little hack for testing
+#     if "month" in subset:
+#         cfg.TEST.EVAL_PERIOD = 1e10
+#         cfg.SOLVER.CHECKPOINT_PERIOD = 1e10
     
     cfg.MODEL.CONTEXT.BANKS_DIR = banks_dir
     cfg.MODEL.CONTEXT.SOFTMAX_TEMP = temp
@@ -88,7 +100,9 @@ def get_training_config(data_dir="../data", model="context-rcnn-r101", device="c
     cfg.OUTPUT_DIR = cfg.OUTPUT_DIR + "_" + model + "_" + dataset + "_" + subset
     if custom_weights_supplied:
         cfg.OUTPUT_DIR = cfg.OUTPUT_DIR + "_pretrained"
-    
+    if freeze:
+        cfg.OUTPUT_DIR = cfg.OUTPUT_DIR + "_freeze"
+        
     # run some default setup from Detectron2
     # note: this eliminates:
     # cfg.merge_from_list(args.opts)
@@ -145,6 +159,8 @@ def training_argument_parser():
     parser.add_argument("--weights", default=None, help="path to pth file for alternate weights initialization. used for models with alternate (non-COCO) pretraining, etc.")
     parser.add_argument("--lr", default=None, type=float, help="custom learning rate; does not scale with num GPUs")
     parser.add_argument("--temp", default=0.01, type=float, help="softmax temperature for attention network")
+    parser.add_argument("--amp", action="store_true", help="enable mixed precision training with torch native AMP")
+    parser.add_argument("--freeze", action="store_true", help="freeze everything except the long_term context module")
     
     return parser
 
@@ -154,10 +170,10 @@ def main(args):
         
     cfg = get_training_config(model=args.model, data_dir=args.data_dir, device=args.device, num_gpus=args.num_gpus,
                               banks_dir=args.banks, dataset=args.dataset, subset=args.subset, 
-                              weights_path=args.weights, lr=args.lr, temp=args.temp)
+                              weights_path=args.weights, lr=args.lr, temp=args.temp, amp=args.amp, freeze=args.freeze)
     
     if "context" in args.model:
-        trainer = get_context_trainer(cfg, args.resume)
+        trainer = get_context_trainer(cfg, args.resume, args.freeze)
     else:
         trainer = get_coco_trainer(cfg, args.resume)
         
