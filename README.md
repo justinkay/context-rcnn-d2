@@ -4,6 +4,6 @@ An (in progress) implementation of [Context R-CNN: Long Term Temporal Context fo
 
 Currently supports the long-term network only, and one contextual proposal per image.
 
-More info coming soon.
+More documentation coming soon.
 
 See also: [Tensorflow implementation](https://github.com/tensorflow/models/tree/master/research/object_detection)
