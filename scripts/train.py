@@ -18,13 +18,15 @@ import context_rcnn.roi_heads
 
 
 _MODELS = {
-    "frcnn-r101": { "weights": "detectron2://COCO-Detection/faster_rcnn_R_101_FPN_3x/137851257/model_final_f6e8b1.pkl",
+    "frcnn-fpn": { "weights": "detectron2://COCO-Detection/faster_rcnn_R_101_FPN_3x/137851257/model_final_f6e8b1.pkl",
                      "config": "../configs/COCO-Detection/faster_rcnn_R_101_FPN_3x.yaml" },
-    "context-rcnn-r101": { "weights": "detectron2://COCO-Detection/faster_rcnn_R_101_FPN_3x/137851257/model_final_f6e8b1.pkl",
+    "frcnn-c4": { "weights": "detectron2://COCO-Detection/faster_rcnn_R_101_C4_3x/138204752/model_final_298dad.pkl",
+                     "config": "../configs/COCO-Detection/faster_rcnn_R_101_C4_3x.yaml" },
+    "context-rcnn": { "weights": "detectron2://COCO-Detection/faster_rcnn_R_101_FPN_3x/137851257/model_final_f6e8b1.pkl",
                      "config": "../configs/COCO-Detection/context_rcnn_R_101_FPN.yaml" },
 }
 
-def get_training_config(data_dir="../data", model="context-rcnn-r101", device="cuda", num_gpus=8, banks_dir="./banks", dataset="cct", 
+def get_training_config(data_dir="../data", model="context-rcnn", device="cuda", num_gpus=8, banks_dir="./banks", dataset="cct", 
                         subset="default", weights_path=None, lr=None, temp=0.01, amp=False, freeze=False):
     custom_weights_supplied = weights_path is not None
     weights_path = weights_path or _MODELS[model]["weights"]
@@ -149,16 +151,16 @@ def training_argument_parser():
     # get parse with Detectron2 default commands
     parser = default_argument_parser()
 
-    parser.add_argument("--model", default="context-rcnn-r101", help="name of model to train, { 'frcnn-r101', 'context-rcnn-r101' }")
-    parser.add_argument("--data-dir", default="../data", metavar="FILE", help="path to data/")
-    parser.add_argument("--device", default="cuda", help="{ 'cuda', 'cpu' }")
+    parser.add_argument("--model", default="context-rcnn-r101", help="name of model to train, { 'frcnn-fpn', 'frcnn-c4', 'context-rcnn' }. default 'context-rcnn'")
+    parser.add_argument("--data-dir", default="../data", metavar="FILE", help="path to data/ ; default ../data")
+    parser.add_argument("--device", default="cuda", help="{ 'cuda', 'cpu' }. default 'cuda'")
     parser.add_argument("--wandb", help="name of wandb project to log tensorboard results")
-    parser.add_argument("--banks", default="./banks", help="Location of memory banks for Context R-CNN")
+    parser.add_argument("--banks", default="./banks", help="Location of memory banks for Context R-CNN. default ./banks")
     parser.add_argument("--dataset", default="cct", help="{ 'cct' }")
-    parser.add_argument("--subset", default="default", help="{ 'default' }")
+    parser.add_argument("--subset", default="default", help="{ 'default', 'species', 'toy1924', 'toy1924-species' }. default 'default'")
     parser.add_argument("--weights", default=None, help="path to pth file for alternate weights initialization. used for models with alternate (non-COCO) pretraining, etc.")
     parser.add_argument("--lr", default=None, type=float, help="custom learning rate; does not scale with num GPUs")
-    parser.add_argument("--temp", default=0.01, type=float, help="softmax temperature for attention network")
+    parser.add_argument("--temp", default=0.01, type=float, help="softmax temperature for attention network. default 0.01")
     parser.add_argument("--amp", action="store_true", help="enable mixed precision training with torch native AMP")
     parser.add_argument("--freeze", action="store_true", help="freeze everything except the long_term context module")
     

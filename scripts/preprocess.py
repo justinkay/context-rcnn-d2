@@ -22,6 +22,12 @@ _MODELS = {
         "weights": "toy1924-multi-18epoch/model_final.pth",
         "config": "toy1924-multi-18epoch/config.yaml"
     },
+    
+    # model straight from detectron
+    "c4-d2": {
+        "weights": "pretrained/d2/model_final_298dad.pkl",
+        "config": "pretrained/d2/config.yaml"
+    },
 }
 
 def get_cfg_for_inference(model_name, models_dir, score_threshold=0.0, nms_threshold=0.5):

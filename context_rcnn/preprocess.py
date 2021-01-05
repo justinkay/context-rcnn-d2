@@ -29,15 +29,16 @@ def get_feats_for_im(predictor, im):
         predictor: a detectron2.engine.defaults.DefaultPredictor
         im: an image loaded with cv2.imread(...)
     """
+    roi_heads = predictor.model.roi_heads
+    
     # register a hook for this image to keep intermediate output from backbone
     roi_heads_io = SaveIO()
-    handle = predictor.model.roi_heads.register_forward_hook(roi_heads_io)
+    handle = roi_heads.register_forward_hook(roi_heads_io)
     
     # run inference and grab backbone features
     output = predictor(im)
     images, features, proposals, gt_instances = roi_heads_io.input
-#     results, _ = roi_heads_io.output
-    feats_list = [features[f] for f in predictor.model.roi_heads.in_features]
+    feats_list = [features[f] for f in roi_heads.in_features]
 
     tfm = predictor.aug.get_transform(im)
     instances = detector_postprocess(output["instances"], output_height=tfm.new_h, output_width=tfm.new_w)
@@ -45,7 +46,9 @@ def get_feats_for_im(predictor, im):
     # get pooled features of the top prediction
     # TODO support more than 1 box
     top_pred = instances.pred_boxes[0]
-    pooled_feats = predictor.model.roi_heads.box_pooler(feats_list, [top_pred])
+    
+    pooler = roi_heads.box_pooler if hasattr(roi_heads, "box_pooler") else roi_heads.pooler
+    pooled_feats = pooler(feats_list, [top_pred])
     
     # pool over spatial dimensions to get final feats
     # assume batch size = 1 
