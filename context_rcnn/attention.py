@@ -9,6 +9,7 @@ class FullyConnected(torch.nn.Module):
     def __init__(self, D_in, D_out, normalize=False):
         super(FullyConnected, self).__init__()
         
+        self.D_in = D_in
         self.D_out = D_out
         self.fc = torch.nn.Sequential(
             torch.nn.Linear(D_in, D_out),
@@ -25,6 +26,8 @@ class FullyConnected(torch.nn.Module):
             y: B x n x D_out
         """
         batch_size, _, num_features = x.shape
+        assert(num_features == self.D_in), str(num_features) + " does not match required input size to FC layer:" + "str(self.D_in)"
+        
         features = torch.reshape(x, [-1, num_features])
         
         y = self.fc(features)
@@ -40,7 +43,7 @@ class Attention(torch.nn.Module):
     def __init__(self, num_input_feats, num_context_feats, d1=2048, d2=2048, temp=0.01):
         """
         Args:
-            num_feats: number of features per input box (2048 in paper (original Faster RCNN implementation; 256 for FPN)
+            num_feats: number of features per input box (2048 in paper/original Faster RCNN implementation)
             num_context_feats: number of features per context item (d0=2057 in paper)
             d1: first hidden layer size   (2048 in paper)
             d2: second hidden layer size  (2048 in paper)
@@ -64,18 +67,15 @@ class Attention(torch.nn.Module):
         """
         n = num input proposals
         m = num context proposals
-        
         Args:
-            x: B x n x num_input_feats x kernel_size x kernel_size
+            x: B x n x num_input_feats
             x_context: B x m x num_context_feats
             num_valid_context_items: B x 1; how many (<= m) context items are present for each image
         
         Return:
-            f_context: B x n x num_input_feats x kernel_size x kernel_size
+            f_context: B x n x num_input_feats
         """
-        x_pool = x.mean([-2, -1])                             # -> B x n x num_input_feats
-        
-        queries = self.fc_q(x_pool)                           # -> B x n x d1
+        queries = self.fc_q(x)                                # -> B x n x d1
         keys = self.fc_k(x_context)                           # -> B x m x d1
         values = self.fc_v(x_context)                         # -> B x m x d2
         weights = torch.bmm(queries, keys.transpose(-2,-1))   # -> B x n x m
@@ -92,9 +92,6 @@ class Attention(torch.nn.Module):
         weights = F.softmax(weights / self.temp, dim=-1)      # -> B x n x m, feats for each n sum to 1
         wv = torch.bmm(weights, values)                       # -> B x n x d2
         f_context = self.fc_f(wv)                             # -> B x n x num_input_feats
-        
-        # expand back to input shape
-        f_context = f_context.unsqueeze(-1).unsqueeze(-1).expand(x.shape) # -> B x n x num_input_feats x kernel_size x kernel_size
         
         # store these for debugging and visualization
         self._last_weights = weights.detach()

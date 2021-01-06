@@ -10,6 +10,7 @@ from tqdm import tqdm
 from detectron2.data import DatasetCatalog
 from detectron2.engine.defaults import DefaultPredictor
 from detectron2.modeling.postprocessing import detector_postprocess
+from detectron2.modeling.roi_heads import Res5ROIHeads, StandardROIHeads
 
 from context_rcnn.data import register_dataset, _DATASETS
 
@@ -38,22 +39,29 @@ def get_feats_for_im(predictor, im):
     # run inference and grab backbone features
     output = predictor(im)
     images, features, proposals, gt_instances = roi_heads_io.input
-    feats_list = [features[f] for f in roi_heads.in_features]
 
+    # transform predictions back into img dimensions seen by model
     tfm = predictor.aug.get_transform(im)
     instances = detector_postprocess(output["instances"], output_height=tfm.new_h, output_width=tfm.new_w)
     
-    # get pooled features of the top prediction
     # TODO support more than 1 box
     top_pred = instances.pred_boxes[0]
     
-    pooler = roi_heads.box_pooler if hasattr(roi_heads, "box_pooler") else roi_heads.pooler
-    pooled_feats = pooler(feats_list, [top_pred])
-    
-    # pool over spatial dimensions to get final feats
-    # assume batch size = 1 
-    final_feats = torch.squeeze(pooled_feats.mean([-2, -1]))
-    
+    # get instance features
+    feats_list = [features[f] for f in roi_heads.in_features]
+    if isinstance(roi_heads, Res5ROIHeads):
+        box_features = roi_heads._shared_roi_transform(feats_list, [top_pred]) # -> num_proposals x 2048 x 7 x 7
+        # pool over spatial dimensions to get final feats
+        box_features = box_features.mean([-2, -1])                             # -> num_proposals x 2048
+    elif isinstance(roi_heads, StandardROIHeads):
+        box_features = roi_heads.box_pooler(feats_list, [top_pred])
+        box_features = roi_heads.box_head(box_features)                        # -> num_proposals x 1024
+    else:
+        print("ROI heads class not supported:", type(roi_heads))
+        
+    # TODO assumes one proposal
+    final_feats = torch.squeeze(box_features)
+        
     # add scaled bbox info as additional feats
     img_wh = torch.Tensor([tfm.new_w, tfm.new_h]).to(top_pred.tensor.device)
     centers = torch.div(top_pred.get_centers()[0], img_wh)
@@ -112,8 +120,8 @@ def build_banks(cfg, dataset_name, data_dir, bank_dir, gpu_idx=0, num_gpus=1):
             for im_id in tqdm(im_ids, desc="Location {}; {}/{}".format(location, i+1, len(by_location))):
                 im = cv2.imread(os.path.join(img_loc, im_id + ".jpg"))
                 # TODO append datetime features
-                output[im_id] = get_feats_for_im(predictor, im).cpu().numpy()
-                flipped_output[im_id] = get_feats_for_im(predictor, cv2.flip(im, 1)).cpu().numpy()
+                output[im_id] = get_feats_for_im(predictor, im).detach().cpu().numpy()
+                flipped_output[im_id] = get_feats_for_im(predictor, cv2.flip(im, 1)).detach().cpu().numpy()
                 
             with open(os.path.join(bank_dir, str(location) + ".pkl"), "wb") as f:
                 pickle.dump(output, f)
@@ -141,8 +149,8 @@ def build_one_bank(cfg, dataset_name, data_dir, bank_dir, loc, in_train):
         for im_id in tqdm(im_ids):
             im = cv2.imread(os.path.join(img_loc, im_id + ".jpg"))
             # TODO append datetime features
-            output[im_id] = get_feats_for_im(predictor, im).cpu().numpy()
-            flipped_output[im_id] = get_feats_for_im(predictor, cv2.flip(im, 1)).cpu().numpy()
+            output[im_id] = get_feats_for_im(predictor, im).detach().cpu().numpy()
+            flipped_output[im_id] = get_feats_for_im(predictor, cv2.flip(im, 1)).detach().cpu().numpy()
                 
         with open(os.path.join(bank_dir, str(loc) + ".pkl"), "wb") as f:
             pickle.dump(output, f)

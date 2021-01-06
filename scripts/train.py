@@ -22,11 +22,13 @@ _MODELS = {
                      "config": "../configs/COCO-Detection/faster_rcnn_R_101_FPN_3x.yaml" },
     "frcnn-c4": { "weights": "detectron2://COCO-Detection/faster_rcnn_R_101_C4_3x/138204752/model_final_298dad.pkl",
                      "config": "../configs/COCO-Detection/faster_rcnn_R_101_C4_3x.yaml" },
-    "context-rcnn": { "weights": "detectron2://COCO-Detection/faster_rcnn_R_101_FPN_3x/137851257/model_final_f6e8b1.pkl",
+    "context-rcnn-fpn": { "weights": "detectron2://COCO-Detection/faster_rcnn_R_101_FPN_3x/137851257/model_final_f6e8b1.pkl",
                      "config": "../configs/COCO-Detection/context_rcnn_R_101_FPN.yaml" },
+    "context-rcnn-c4": { "weights": "detectron2://COCO-Detection/faster_rcnn_R_101_C4_3x/138204752/model_final_298dad.pkl",
+                     "config": "../configs/COCO-Detection/context_rcnn_R_101_C4.yaml" },
 }
 
-def get_training_config(data_dir="../data", model="context-rcnn", device="cuda", num_gpus=8, banks_dir="./banks", dataset="cct", 
+def get_training_config(data_dir="../data", model="context-rcnn-fpn", device="cuda", num_gpus=8, banks_dir="./banks", dataset="cct", 
                         subset="default", weights_path=None, lr=None, temp=0.01, amp=False, freeze=False):
     custom_weights_supplied = weights_path is not None
     weights_path = weights_path or _MODELS[model]["weights"]
@@ -151,7 +153,7 @@ def training_argument_parser():
     # get parse with Detectron2 default commands
     parser = default_argument_parser()
 
-    parser.add_argument("--model", default="context-rcnn-r101", help="name of model to train, { 'frcnn-fpn', 'frcnn-c4', 'context-rcnn' }. default 'context-rcnn'")
+    parser.add_argument("--model", default="context-rcnn-fpn", help="name of model to train, { 'frcnn-fpn', 'frcnn-c4', 'context-rcnn-fpn', 'context-rcnn-c4' }. default 'context-rcnn-fpn'")
     parser.add_argument("--data-dir", default="../data", metavar="FILE", help="path to data/ ; default ../data")
     parser.add_argument("--device", default="cuda", help="{ 'cuda', 'cpu' }. default 'cuda'")
     parser.add_argument("--wandb", help="name of wandb project to log tensorboard results")

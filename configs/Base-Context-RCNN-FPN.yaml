@@ -34,9 +34,9 @@ MODEL:
     D1: 2048 # hidden layer 1
     D2: 2048 # hidden layer 2
     SOFTMAX_TEMP: 0.01
-    NUM_INPUT_FEATS: 256
+    NUM_INPUT_FEATS: 256 # if using FPN feats before box head
     # this assumes context does not include datetime
-    NUM_CONTEXT_FEATS: 260
+    NUM_CONTEXT_FEATS: 1028
     BANKS_DIR: './banks'
 DATASETS:
   TRAIN: ("cct_train",)

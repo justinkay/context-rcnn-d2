@@ -18,16 +18,17 @@ _MODELS = {
     },
     
     # toy model undertrained on just toy1924-species
-    "toy": {
-        "weights": "toy1924-multi-18epoch/model_final.pth",
-        "config": "toy1924-multi-18epoch/config.yaml"
+    "toy-fpn": {
+        "weights": "toy1924-multi-18epoch-fpn/model_final.pth",
+        "config": "toy1924-multi-18epoch-fpn/config.yaml"
     },
     
-    # model straight from detectron
-    "c4-d2": {
-        "weights": "pretrained/d2/model_final_298dad.pkl",
-        "config": "pretrained/d2/config.yaml"
+    # toy model undertrained on just toy1924-species
+    "toy-c4": {
+        "weights": "toy1924-multi-18epoch-c4/model_final.pth",
+        "config": "toy1924-multi-18epoch-c4/config.yaml"
     },
+    
 }
 
 def get_cfg_for_inference(model_name, models_dir, score_threshold=0.0, nms_threshold=0.5):
