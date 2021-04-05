@@ -51,7 +51,7 @@ image
 
 All other fields are the same as standard COCO. 
 
-Then, add your dataset info to ```context_rcnn.data._DATASETS``` in the format provided. All paths are relative to your data_dir when running scripts (e.g. ```./data```):
+Then, add your dataset info to ```context_rcnn.data._DATASETS``` in the format provided. Image/label directory paths are relative to the ```data-dir``` supplied as a command line argument (e.g. ```./data```):
 
 ```
 dataset_name: {
@@ -59,8 +59,8 @@ dataset_name: {
         "labels_loc": "path/to/labels/directory/",
         
         subset0_name: {
-            "train_filename": str,
-            "val_filename": str,
+            "train_filename": path/to/train_coco.json, # relative to labels_loc
+            "val_filename": path/to/val_coco.json,     # relative to labels_loc
             "num_classes": int
         },
         
@@ -69,6 +69,8 @@ dataset_name: {
         }
 }
 ```
+
+Then, calling ```context_rcnn.data.register_dataset(data_dir, dataset_name)``` will register a training set and validation set based on these paths (keyed by ```dataset_name_train``` and ```dataset_name_val```, respsectively).
 
 ## Preprocessing (Generate memory banks)
 
