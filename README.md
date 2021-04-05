@@ -74,7 +74,7 @@ dataset_name: {
 
 To train a Context R-CNN, you must first generate memory banks of extracted features for your dataset using an existing Faster R-CNN model. This can be, for example, a COCO-pretrained model or a model you have previously trained.
 
-To do this, add info about your model to ```scripts.preprocess._MODELS``` in the format provided. All paths are relative to your models_dir when running scripts.
+To do this, add info about your model to ```scripts.preprocess._MODELS``` in the format provided. All paths are relative to the ```models-dir``` provided as a command line argument.
 
 ```
 model_name: {
@@ -114,8 +114,9 @@ Coming soon.
 
 ## TODO
 
-- [ ] Short-term network
+- [ ] Add datetime encoding and index memory banks by datetime
 - [ ] Extract multiple regions per image for memory banks
+- [ ] Add short-term attention network
 
 # References
 [Context R-CNN: Long Term Temporal Context for Per-Camera Object Detection](https://arxiv.org/abs/1912.03538) Sara Beery, Guanhang Wu, Vivek Rathod, Ronny Votel, Jonathan Huang
