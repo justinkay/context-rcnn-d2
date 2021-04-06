@@ -6,6 +6,8 @@ import pandas as pd
 import pickle
 import torch
 from tqdm import tqdm
+from datetime import datetime
+import numpy as np
 
 from detectron2.data import DatasetCatalog
 from detectron2.engine.defaults import DefaultPredictor
@@ -76,8 +78,6 @@ def get_feats_for_im(predictor, im):
     
     return embedding
     
-    
-
 def assign_locs_greedy(df, num_gpus):
     """
     Assign locations to each gpu such that the number of images processing by each GPU is
@@ -105,6 +105,14 @@ def assign_locs_greedy(df, num_gpus):
     
     return locs_per_gpu
     
+def get_datetime_encoding(dt):
+    """Get the feature encoding for a datetime object."""
+    return np.array([ (dt.year - 1990) / 40, 
+                     dt.month / 12, 
+                     dt.day / 31, 
+                     dt.hour / 24, 
+                     dt.minute / 60 ])
+    
 def build_banks(cfg, dataset_name, data_dir, bank_dir, gpu_idx=0, num_gpus=1):
     """
     Args:
@@ -114,6 +122,13 @@ def build_banks(cfg, dataset_name, data_dir, bank_dir, gpu_idx=0, num_gpus=1):
         bank_dir: output location for feature banks
         gpu_idx: which gpu this method is to be run on
         num_gpus: total number of gpus running inference
+        
+        
+    Writes 2 pickle files, one for standard memory bank and one for memory bank
+    of horizontally flipped images to handle data augmentation during training.
+    
+    Banks are dicts of dicts, keyed by bank[location][month][image_id] = feats,
+    where month is an int from 1 to 12.
     """
     if not os.path.exists(bank_dir):
         os.mkdir(bank_dir)
@@ -133,15 +148,17 @@ def build_banks(cfg, dataset_name, data_dir, bank_dir, gpu_idx=0, num_gpus=1):
         
         by_location = df.groupby("location")
         for i, (location, df_group) in enumerate(by_location):
-            # dicts mapping img_id: feats (TODO key by datetime)
-            output = {} 
-            flipped_output = {}
+            output = { month: {} for month in range(1,13) }
+            flipped_output = { month: {} for month in range(1,13) }
             im_ids = df_group.image_id.values
-            for im_id in tqdm(im_ids, desc="Location {}; {}/{}".format(location, i+1, len(by_location))):
+            dts = df_group.datetime.values
+            for im_id, dt in tqdm(zip(im_ids, dts), 
+                                        desc="Location {}; {}/{}".format(location, i+1, len(by_location)), total=len(im_ids)):
                 im = cv2.imread(os.path.join(img_loc, im_id + ".jpg"))
-                # TODO append datetime features
-                output[im_id] = get_feats_for_im(predictor, im).detach().cpu().numpy()
-                flipped_output[im_id] = get_feats_for_im(predictor, cv2.flip(im, 1)).detach().cpu().numpy()
+                dt_obj = datetime.fromisoformat(dt)
+                dt = get_datetime_encoding(dt_obj)
+                output[dt_obj.month][im_id] = np.concatenate((get_feats_for_im(predictor, im).detach().cpu().numpy(), dt), axis=0)
+                flipped_output[dt_obj.month][im_id] = np.concatenate((get_feats_for_im(predictor, cv2.flip(im, 1)).detach().cpu().numpy(), dt), axis=0)
                 
             with open(os.path.join(bank_dir, str(location) + ".pkl"), "wb") as f:
                 pickle.dump(output, f)
@@ -150,7 +167,7 @@ def build_banks(cfg, dataset_name, data_dir, bank_dir, gpu_idx=0, num_gpus=1):
                 pickle.dump(flipped_output, f)
                 
 def build_one_bank(cfg, dataset_name, data_dir, bank_dir, loc, in_train):
-    """Method used mostly for testing."""
+    """Method used mostly for testing. Creates memory banks for a single location."""
     if not os.path.exists(bank_dir):
         os.mkdir(bank_dir)
         
@@ -163,15 +180,17 @@ def build_one_bank(cfg, dataset_name, data_dir, bank_dir, loc, in_train):
     df = pd.DataFrame(dataset_dict)
     df = df[df.location == loc]
     if len(df):
-        output = {} 
-        flipped_output = {}
+        output = { month: {} for month in range(1,13) }
+        flipped_output = { month: {} for month in range(1,13) }
         im_ids = df.image_id.values
-        for im_id in tqdm(im_ids):
+        dts = df.datetime.values
+        for im_id, dt in tqdm(zip(im_ids, dts), total=len(im_ids)):
             im = cv2.imread(os.path.join(img_loc, im_id + ".jpg"))
-            # TODO append datetime features
-            output[im_id] = get_feats_for_im(predictor, im).detach().cpu().numpy()
-            flipped_output[im_id] = get_feats_for_im(predictor, cv2.flip(im, 1)).detach().cpu().numpy()
-                
+            dt_obj = datetime.fromisoformat(dt)
+            dt = get_datetime_encoding(dt_obj)
+            output[dt_obj.month][im_id] = np.concatenate((get_feats_for_im(predictor, im).detach().cpu().numpy(), dt), axis=0)
+            flipped_output[dt_obj.month][im_id] = np.concatenate((get_feats_for_im(predictor, cv2.flip(im, 1)).detach().cpu().numpy(), dt), axis=0)
+        
         with open(os.path.join(bank_dir, str(loc) + ".pkl"), "wb") as f:
             pickle.dump(output, f)
 

@@ -9,6 +9,7 @@ import sys
 import io
 import logging
 from typing import List, Optional, Union
+from datetime import datetime
 
 import contextlib
 from detectron2.config import configurable
@@ -244,7 +245,8 @@ class ContextDatasetMapper(DatasetMapper):
         })
         return ret
        
-    def _get_bank_feats(self, location, flipped):
+    def _get_bank_feats(self, location, month, flipped):
+        """Load memory bank features for this location from disk."""
         loc_filename = os.path.join(self.banks_dir, location + ("_flip.pkl" if flipped else ".pkl"))
         loc_feats_dict = {}
         try:
@@ -259,11 +261,16 @@ class ContextDatasetMapper(DatasetMapper):
         
         num_valid_context_items = 0
         if len(loc_feats_dict.values()):
-            loc_feats = torch.stack([torch.as_tensor(v) for v in loc_feats_dict.values()])
-            num_valid_context_items = min(self.num_context_items, len(loc_feats))
-            # TODO if more than self.num_context_feats, randomly select
-            loc_feats = loc_feats[:num_valid_context_items]
-            final_feats[0, :len(loc_feats), :] = loc_feats
+            month_feats = loc_feats_dict[month]
+            if len(month_feats):
+                loc_feats = torch.stack([torch.as_tensor(v) for v in month_feats.values()])
+                num_valid_context_items = min(self.num_context_items, len(loc_feats))
+                # TODO if more than self.num_context_feats, randomly select?
+                loc_feats = loc_feats[:num_valid_context_items]
+                final_feats[0, :len(loc_feats), :] = loc_feats
+            else:
+                # remove this
+                print("No feats for month", month, "at loc", location)
         else:
             print("No feats for loc", loc_filename)
         
@@ -297,7 +304,8 @@ class ContextDatasetMapper(DatasetMapper):
 
         ### begin modifications for ContextDatasetMapper ###
         has_flip = any(isinstance(t, HFlipTransform) for t in transforms)
-        context_feats, num_valid_context_items = self._get_bank_feats(dataset_dict["location"], has_flip)
+        month = datetime.fromisoformat(dataset_dict["datetime"]).month
+        context_feats, num_valid_context_items = self._get_bank_feats(dataset_dict["location"], month, has_flip)
         dataset_dict["context_feats"] = context_feats
         dataset_dict["num_valid_context_items"] = num_valid_context_items
         dataset_dict["banks_dir"] = self.banks_dir

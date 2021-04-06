@@ -11,8 +11,7 @@ MODEL:
     D2: 2048
     SOFTMAX_TEMP: 0.01
     NUM_INPUT_FEATS: 1024
-    # this assumes context does not include datetime
-    NUM_CONTEXT_FEATS: 2052
+    NUM_CONTEXT_FEATS: 2057 # includes bbox location encoding & datetime
     BANKS_DIR: './banks'
 DATASETS:
   TRAIN: ("coco_2017_train",)

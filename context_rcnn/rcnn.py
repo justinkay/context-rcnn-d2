@@ -2,6 +2,7 @@ from typing import Dict, List, Union, Optional, Tuple
 import torch
 import math
 import numpy as np
+from datetime import datetime
 
 from detectron2.data.detection_utils import convert_image_to_rgb
 import detectron2.modeling.proposal_generator.proposal_utils as proposal_utils
@@ -121,6 +122,7 @@ class ContextRCNN(GeneralizedRCNN):
             
             # visualize attn weights
             bank = pickle.load(open(os.path.join(input["banks_dir"], str(input["location"]) + ".pkl"), "rb"))
+            month = datetime.fromisoformat(input["datetime"]).month
             all_weights = last_weights.flatten()
             top_values, top_indices = torch.topk(all_weights, k=4)
             
@@ -130,7 +132,7 @@ class ContextRCNN(GeneralizedRCNN):
         
             att_imgs = []
             for ind in inds_in_row:
-                top_im_path = os.path.join(os.path.dirname(input["file_name"]), list(bank.keys())[ind] + ".jpg")
+                top_im_path = os.path.join(os.path.dirname(input["file_name"]), list(bank[month].keys())[ind] + ".jpg")
                 top_im = convert_image_to_rgb(cv2.imread(top_im_path), "BGR")
                 resize_to = (imw, imh)
                 top_im = cv2.resize(top_im, resize_to)
