@@ -39,13 +39,14 @@ image
   "width" : int,
   "height" : int,
   
-  # Optional
+  # Optional - info for long-term network
   "location": str,
   "date_captured": str, # should be isoformat: https://docs.python.org/3/library/datetime.html#datetime.date.fromisoformat  
+  
+  # Optional, but not yet implemented - info for short-term network
   "seq_id": str,
   "seq_num_frames": int,
   "frame_num": int,
-  "rights_holder" : str, 
 }
 ```
 
