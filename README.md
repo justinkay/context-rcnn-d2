@@ -116,9 +116,9 @@ Coming soon.
 
 ## TODO
 
-- [ ] Add datetime encoding and index memory banks by datetime
-- [ ] Extract multiple regions per image for memory banks
+- [ ] Option to extract multiple regions per image for memory banks
 - [ ] Add short-term attention network
+- [ ] Options for location of feature extraction and attention modules (before/after classification head)
 
 # References
 [Context R-CNN: Long Term Temporal Context for Per-Camera Object Detection](https://arxiv.org/abs/1912.03538) Sara Beery, Guanhang Wu, Vivek Rathod, Ronny Votel, Jonathan Huang
