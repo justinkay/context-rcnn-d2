@@ -41,7 +41,7 @@ image
   
   # Optional
   "location": str,
-  "date_captured": str, # format: YYYY-mm-dd HH:MM:SS   
+  "date_captured": str, # should be isoformat: https://docs.python.org/3/library/datetime.html#datetime.date.fromisoformat  
   "seq_id": str,
   "seq_num_frames": int,
   "frame_num": int,
