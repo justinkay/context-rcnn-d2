@@ -76,6 +76,35 @@ def get_feats_for_im(predictor, im):
     
     return embedding
     
+    
+
+def assign_locs_greedy(df, num_gpus):
+    """
+    Assign locations to each gpu such that the number of images processing by each GPU is
+    (approximately) minimized. This is essentially a simple greedy solution to the
+    multiway number partitioning problem.
+    
+    Return: List of lists, one list of location IDs per GPU
+    """
+    locs = df.location.unique()
+    
+    # sort in descending order by ims per loc
+    loc_to_size = [ (loc, len(df[df.location == loc].image_id.unique())) for loc in locs ]
+    loc_to_size.sort(key = lambda x: x[1], reverse=True)
+    
+    gpus_to_size = [ (i, 0) for i in range(num_gpus) ]
+    locs_per_gpu = [ [] for _ in range(num_gpus) ]
+    
+    for loc, size in loc_to_size:
+        # assign this loc to gpu with fewest images so far
+        gpus_to_size.sort(key=lambda x: x[1])
+        gpu_num = gpus_to_size[0][0]
+        gpu_size = gpus_to_size[0][1]
+        gpus_to_size[0] = (gpu_num, gpu_size + size)
+        locs_per_gpu[gpu_num].append(loc)
+    
+    return locs_per_gpu
+    
 def build_banks(cfg, dataset_name, data_dir, bank_dir, gpu_idx=0, num_gpus=1):
     """
     Args:
@@ -96,19 +125,10 @@ def build_banks(cfg, dataset_name, data_dir, bank_dir, gpu_idx=0, num_gpus=1):
     for dataset in (dataset_name + "_train", dataset_name + "_val"):
         print("Building banks for locations in", dataset)
         dataset_dict = DatasetCatalog.get(dataset)
-        df = pd.DataFrame(dataset_dict)
         
-        # filter by locations intended for this gpu
-        # TODO should split this better for imbalanced data
-        locs = df.location.unique()
-        locs_per_gpu = len(locs) // num_gpus
-        start_ind = (gpu_idx)*locs_per_gpu
-        if gpu_idx == (num_gpus-1):
-            # include any leftovers if fractional num locs per gpu
-            end_ind = len(locs)
-        else:
-            end_ind = (gpu_idx+1)*locs_per_gpu
-        my_locs = locs[start_ind:end_ind]
+        # get locations assigned to this GPU
+        df = pd.DataFrame(dataset_dict)
+        my_locs = assign_locs_greedy(df, num_gpus)[gpu_idx]
         df = df[df.location.isin(my_locs)]
         
         by_location = df.groupby("location")

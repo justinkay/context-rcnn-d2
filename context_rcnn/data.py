@@ -121,7 +121,7 @@ def register_coco_cameratraps_instances(name, metadata, json_file, image_root):
     
 def load_coco_cameratraps_json(json_file, image_root, dataset_name=None, extra_annotation_keys=None):
     """
-    See detectron2.data.datasets.coco.py -> load_coco_json(...)
+    See detectron2.data.datasets.coco.load_coco_json(...)
     
     Minor modifications here to include datetime and location, since Detectron2 methods don't allow
     for extra annotation keys at the image level.
