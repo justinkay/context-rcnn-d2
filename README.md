@@ -116,6 +116,7 @@ Coming soon.
 
 ## TODO
 
+- [ ] Larger batch size during preprocessing (currently uses DefaultPredictor, which has bs=1 per GPU)
 - [ ] Option to extract multiple regions per image for memory banks
 - [ ] Add short-term attention network
 - [ ] Options for location of feature extraction and attention modules (before/after classification head)
