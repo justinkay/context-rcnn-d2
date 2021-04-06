@@ -29,7 +29,7 @@ Data is expected in COCO Camera Traps format. Your json files should have the st
 }
 ```
 
-For each image in the "images" list, add datetime, seq_id, seq_num_frames, and location:
+For each image in the "images" list, add location and datetime:
 ```
 image
 {
