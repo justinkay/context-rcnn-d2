@@ -1,3 +1,5 @@
+Disclaimer: This codebase does not reproduce the main results of Beery et al. on the CCT dataset. I am archiving it because I do not personally plan to develop it further, but if you have an interest in building upon this or upgrading it to a newer version of Detectron2 please reach out to kayj \[at\] mit \[dot\] edu.
+
 # Context R-CNN
 
 An implementation of [Context R-CNN: Long Term Temporal Context for Per-Camera Object Detection](https://arxiv.org/abs/1912.03538) on top of the [Detectron2](https://github.com/facebookresearch/detectron2) object detection library. 
